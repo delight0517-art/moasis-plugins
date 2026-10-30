@@ -1,0 +1,6 @@
+{
+  "name": "App Store Connect Release",
+  "version": "1.0.0",
+  "description": "Plan an exact app release and fingerprint its distribution package. Upload, signing and submission remain separate verified steps.",
+  "main": "index.js"
+}

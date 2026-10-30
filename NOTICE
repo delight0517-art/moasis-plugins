@@ -1,0 +1,11 @@
+M-Oasis Plugins
+
+Existing StarNet skills and the documented host plugin API:
+Copyright (c) 2026 Andrew Sims, MIT License.
+Upstream: https://github.com/androoAGI/starnet
+
+M-Oasis extension code and portable release adaptations:
+Copyright (c) 2026 M-Oasis contributors, MIT License.
+
+Third-party applications, executable CLIs, credentials and personal station state
+are not included. Preserve upstream attribution in redistributions.

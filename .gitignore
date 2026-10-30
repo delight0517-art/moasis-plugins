@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+.env
+.env.*
+*.p8
+*.p12
+*.ipa
+*.pkg
+workspaces/
+plugin-data/

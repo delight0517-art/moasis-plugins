@@ -1,0 +1,9 @@
+{
+  "name": "Aside Browser Bridge",
+  "version": "1.0.0",
+  "description": "A native StarNet Aside workspace that delegates browser tasks to the user's existing Aside session.",
+  "main": "index.js",
+  "screens": [
+    { "id": "main", "title": "STARNET ASIDE", "entry": "ui/index.html", "size": "wide" }
+  ]
+}

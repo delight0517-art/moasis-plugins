@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StarNet Aside</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; }
+    .aside-shell { max-width: 980px; margin: 0 auto; padding: 22px; }
+    .topline { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    h1 { margin: 0; font-size: 30px; letter-spacing: 1.5px; }
+    .sub { margin: 7px 0 0; opacity: .76; }
+    .status { display: flex; align-items: center; gap: 9px; white-space: nowrap; }
+    .lamp { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 12px currentColor; }
+    .lamp.ok { background: var(--ok); }
+    .lamp.bad { background: var(--bad); }
+    .card { margin-top: 20px; padding: 18px; border: 1px solid var(--gd-edge); border-radius: 12px; background: var(--panel); }
+    .notice { margin: 0 0 18px; line-height: 1.5; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .field { display: grid; gap: 7px; }
+    .wide { grid-column: 1 / -1; }
+    .actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .output { min-height: 100px; max-height: 360px; overflow: auto; margin: 12px 0 0; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 8px; background: var(--bg); }
+    .hint { font-size: 14px; opacity: .76; }
+    @media (max-width: 620px) { .aside-shell { padding: 14px; } .topline { display: block; } .status { margin-top: 12px; } .grid { grid-template-columns: 1fr; } .wide { grid-column: auto; } }
+  </style>
+</head>
+<body>
+  <main class="aside-shell">
+    <header class="topline">
+      <div>
+        <h1>STARNET ASIDE</h1>
+        <p class="sub">브라우저 작업 공간 · 기존 Aside 로그인 세션 연결</p>
+      </div>
+      <div class="status" role="status" aria-live="polite"><span id="lamp" class="lamp"></span><span id="state">연결 확인 중…</span></div>
+    </header>
+
+    <section class="card">
+      <p class="notice">StarNet에서 작업을 보내면 Aside가 기존 로그인 세션과 저장된 패스키를 사용합니다. 이 화면은 비밀번호·패스키·인증 코드·쿠키·토큰을 요청하거나 보관하지 않습니다.</p>
+      <form id="task-form" class="grid">
+        <label class="field wide"><span class="sn-label">브라우저 작업</span><textarea class="sn-input" id="prompt" rows="5" maxlength="6000" required placeholder="Aside가 할 페이지와 작업을 구체적으로 입력하세요…"></textarea></label>
+        <label class="field wide"><span class="sn-label">이전 Aside 작업 이어가기 (선택)</span><input class="sn-input" id="session" maxlength="128" autocomplete="off" placeholder="이전 작업의 session ID가 있으면 입력하세요"></label>
+        <div class="actions wide"><button class="sn-btn primary" id="send" type="submit">ASIDE에 작업 보내기</button><button class="sn-btn" id="refresh" type="button">연결 확인</button><span class="hint">Touch ID·QR·기기 확인이 나오면 Aside에서 직접 완료하세요.</span></div>
+      </form>
+    </section>
+
+    <section class="card" aria-live="polite">
+      <div class="sn-label" id="job-label">아직 이 화면에서 보낸 작업이 없습니다.</div>
+      <pre class="output" id="output">Aside 작업 결과가 여기에 표시됩니다.</pre>
+      <p class="hint">작업 내용과 결과는 메모리에만 두고, StarNet에는 짧은 상태와 시각만 저장합니다.</p>
+    </section>
+  </main>
+
+  <script>
+  (() => {
+    const lamp = document.getElementById('lamp');
+    const state = document.getElementById('state');
+    const form = document.getElementById('task-form');
+    const send = document.getElementById('send');
+    const prompt = document.getElementById('prompt');
+    const session = document.getElementById('session');
+    const label = document.getElementById('job-label');
+    const output = document.getElementById('output');
+    let jobId = '';
+    let polling = false;
+
+    async function checkConnection() {
+      state.textContent = '연결 확인 중…';
+      lamp.className = 'lamp';
+      try {
+        const result = await starnet.backend.call('status');
+        state.textContent = result.provider + ' 연결됨 · ' + result.version;
+        lamp.className = 'lamp ok';
+      } catch (error) {
+        state.textContent = 'Aside 연결 안 됨 · CLI 또는 앱을 확인하세요';
+        lamp.className = 'lamp bad';
+      }
+    }
+
+    async function poll() {
+      if (!jobId || polling) return;
+      polling = true;
+      try {
+        const job = await starnet.backend.call('job', { id: jobId });
+        label.textContent = '작업 ' + job.id + ' · ' + job.state;
+        if (job.session_id) session.value = job.session_id;
+        if (job.result) output.textContent = job.result;
+        else if (job.error) output.textContent = job.error;
+        else if (job.state === 'running' || job.state === 'queued') output.textContent = 'Aside가 작업 중입니다. 완료되면 결과가 표시됩니다.';
+        if (job.state === 'done' || job.state === 'error' || job.state === 'interrupted' || job.state === 'unknown') send.disabled = false;
+      } catch (_) {
+        output.textContent = 'StarNet에서 작업 상태를 읽지 못했습니다.';
+      } finally {
+        polling = false;
+        if (jobId && send.disabled) setTimeout(poll, 2500);
+      }
+    }
+
+    async function restoreLastJob() {
+      try {
+        const jobs = await starnet.backend.call('jobs');
+        const job = Array.isArray(jobs) && jobs[0];
+        if (!job) return;
+        jobId = job.id;
+        label.textContent = '작업 ' + job.id + ' · ' + job.state;
+        if (job.result) output.textContent = job.result;
+        else if (job.error) output.textContent = job.error;
+        else output.textContent = 'Aside가 작업 중입니다. 완료되면 결과가 표시됩니다.';
+        if (job.state === 'queued' || job.state === 'running') {
+          send.disabled = true;
+          setTimeout(poll, 500);
+        }
+      } catch (_) {}
+    }
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!prompt.value.trim() || send.disabled) return;
+      send.disabled = true;
+      output.textContent = 'Aside로 작업을 보내는 중…';
+      try {
+        const queued = await starnet.backend.call('submit', { prompt: prompt.value.trim(), session_id: session.value.trim() });
+        jobId = queued.id;
+        label.textContent = '작업 ' + jobId + ' · ' + queued.state;
+        setTimeout(poll, 800);
+      } catch (error) {
+        send.disabled = false;
+        output.textContent = error.message || '작업을 보내지 못했습니다.';
+      }
+    });
+
+    document.getElementById('refresh').addEventListener('click', checkConnection);
+    starnet.ready.then(() => Promise.all([checkConnection(), restoreLastJob()])).catch(() => { state.textContent = 'StarNet 연결을 사용할 수 없습니다'; lamp.className = 'lamp bad'; });
+  })();
+  </script>
+</body>
+</html>
